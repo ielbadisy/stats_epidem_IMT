@@ -1,1 +1,1 @@
-# epidem-decision
+# Applied Statistics in Epidemiology 
