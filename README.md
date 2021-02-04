@@ -9,6 +9,6 @@ Ces notes couvrent principalement les notions suivantes :
 
 12/02/2021
 - Analyse de données de survie
-- Introduction to disease spread modeling : covid19 case study
+- Introduction to infectious disease modeling : covid19 case study
 
 
