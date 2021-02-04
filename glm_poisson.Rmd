@@ -1,0 +1,208 @@
+---
+title: "glm_poisson"
+author: "EL BADISY Imad"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    fig_caption: no 
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    highlight: tango
+header-includes:
+  - \usepackage{titling}
+  - \pretitle{\begin{flushleft}\huge\bfseries}
+  - \posttitle{\end{flushleft}}  
+  - \preauthor{\begin{flushleft}\Large}
+  - \postauthor{\end{flushleft}}  
+  - \predate{\begin{flushleft}\large}
+  - \postdate{\end{flushleft}}
+  - \hypersetup{colorlinks=true, urlcolor = {blue}, linkcolor = {red}}
+  - \renewcommand{\linethickness}{0.05em}
+editor_options: 
+  chunk_output_type: console
+---
+
+##  Application : projection du nombre de prothèses de genou 
+
+Le dataset knee est le résultat d'une simulation de données à partir de caractéristiques réelles statistiques des patients français ayant une prothèse de genou. Les données courvent la période 2009-2018 pour la france métropolitaine. Les variables sont les suivantes : 
+
+-`year` : année de l'observation 
+
+-`age` : tranche d'âge des patients
+
+-`sexe` : sexe des patients
+
+-`prothese`: nombre de prothèses par âge et par sexe
+
+Dans cette application nous allons répondre aux 4 questions suivantes :
+
+* Existe-il une tendance de croissance 'statistiquement significative' du nombre de prothèses de genou par an ?
+
+* Quelles sont les variables qui ont un impact statistiquement significatif sur le nombre de prothèse par an ? 
+
+* Le modèle final est-il bien ajusté aux données ?
+
+* Quelles sont les projections pour 2030 ?
+
+
+1- Chargez le dataset `knee` à partir de votre répertoire de travail.
+```{r}
+knee <- read.delim("~/Desktop/STAT2/STAT_Teaching/datasets/knee") # changer le chemin !!!
+summary(knee)
+
+#=========================================================================================
+knee$age <- as.factor(knee$age) # convertir `age` en factor 
+
+knee$age <- relevel(knee$age, ref = "-45") # fixer la trancher d'âge "-45" comme référence
+```
+
+2- Représentez graphiquement `prothese` en fonction de  `year`.
+```{r}
+plot(knee$year, knee$prothese, xlab = "Year", ylab = "Nombre de prothèses", ylim= c(0,760)) #plot exploratoire de la distribution des nouveaux cas dans le temps 
+
+```
+
+3- Vérifier l'hyptohèse principale du modèle de Poisson $var(Y) = mean(Y)$.
+```{r}
+var(knee$prothese)/mean(knee$prothese)
+```
+La variance de la variable d'intérêt fait presque 157 fois sa moyenne. Sans la validité de cette hyptohèse fondamentale, le modèle de Poisson n'est pas le plus approprié aux données. 
+
+On aura certainnement un problème de surdispersion avec le modèle de Poisson.
+
+4- Estimez un modèle de Poisson en ajustant `prothese` sur `year`, `sexe` et `age`.
+```{r}
+mpoisson <- glm(prothese ~ year + sexe + age, data = knee, family = poisson)
+summary(mpoisson)
+```
+
+5- Testez la sur-dispersion dans le modèle de Poisson à l'aide de la fonction `dispersiontest()` du package `car`.
+```{r}
+library(car)
+library(AER)
+
+dispersiontest(mpoisson)
+```
+Il est clair qu'il y une surdispersion dans le modèle de Poisson. Le test de la surdispersion est significatif. On rejette HO (absence de sur-dispersion) en faveur de H1 (existence de sur-dispersion).
+
+_Solution_ : Changer la fonction de lien en quasi-poisson. La fonction de lien quasi-poisson permet de relacher l'hypothèse de la stricte égalité de la variance et de l'espérance, en modélisant l'espérance comme une fonction linéaire de la variance.
+
+6- Réajustez le modèle précédent en utilisant une fonction de lien `quasipoisson`.
+```{r}
+mquasi <- glm(prothese ~ year  + sexe + age , data = knee, family = quasipoisson) #
+summary(mquasi)
+```
+
+Toutes les variables exlicatives ont un effet statistiquement significatif sur la variable d'intérêt.
+
+7- Vérifiez les hypothèses du modèle quasi-poisson
+
+```{r}
+par(mfrow=c(2,2))
+plot(mquasi)
+```
+
+* Graphe 1 (Predicted values vs Residuals) : montre une augmentation de la variance en fonction des valeurs prédites. Pourquoi ? parce que les fitted values augmentent en fonction du temps (= années). On peut le vérifier cela, simplement : 
+
+```{r}
+plot(knee$year,mquasi$fitted.values)
+```
+Cela ne pose pas de problème vue que la fonction de lien est 'quasi-poisson'.
+
+* Graphe 2 (qq-plot) : Les résidus semblent avoir une distribution normale !
+
+* Graphe 4 (Cook's distance) : Pas d'observations trop influentes, ce qui est plutot bien ! 
+
+8- Procédez à une sélection de covariables pour obtenir le modèle final
+
+_Approche 1_  On utilise la fonction `drop1` pour automatiser la sélection des variables 
+```{r}
+drop1(mquasi, test="Chisq")
+```
+Les trois covariables ont un effet significatif sur la variable d'intérêt.
+
+_Approche 2_ Test de la significativité de la pente (`anova(modele_vide, modele_complet, test= "Chisq")`)
+
+* Modèle complet : prothese ~ year + age + sexe
+
+* Modèle vide : prothse ~ year 
+
+```{r}
+mquasi_0 <- glm(prothese ~ year , data = knee, family = quasipoisson) # 
+anova(mquasi_0, mquasi, test= "Chisq")
+```
+Le test de la déviance est très significatif. Cela veut dire qu'il y a une différence entre les deux modèles. En d'autres termes, l'ajout de l'age et du sexe améliore significativement le modèle. 
+
+9- Evaluez la qualité d'ajustement du modèle (Goodness-of-fit) à l'aide de la fonction `pchisq()`.
+
+```{r}
+min(fitted(mquasi)) #min nombre de cas prédits
+pchisq(deviance(mquasi), df.residual(mquasi), lower = F)
+
+```
+Ici on a un problème, il y a une grande évidence que le modèle n'est pas bien ajusté aux données selon le test de chi2. Cela pourrait avoir comme cause le fait que les données utilisées sont simulées. 
+
+
+_Solution_ : On peut opter pour un modèle négatif binomial, mais nous allons continuer avec notre modèle quasi-poisson pour des raisons pédagogiques ! 
+
+10- Interprétez les coefficients du modèle quasi-poisson. 
+
+* Le paramètre $\beta_1$ associé à la variable year est interprété comme le taux de croissance intrinsèque des nouveaux cas à partir du début de l'étude, si aucune mesure n'a été prise. Toute chose égale par ailleurs, une augmentation d'une unité de year (donc + 1 an) fait augmenter le nombre de prothèse de  presque 6%. 
+
+* Pour les variables binaires, nous pouvons évaluer l'impact d'une variable sur le nombre de prothèses par le concept de Risk Ratio (RR). Si le RR est proche à l'unité (i.e. 1), cela implique que la variable explicative n'a pas d'effet significatif sur Y. 
+
+Pour obtenir le RR de chaque variables explictives, il faut tout simplement introduire l'exp (RR = exp(beta_x)) :
+```{r}
+exp(mquasi$coefficients)
+```
+Exemples : 
+
+- L'augmentation du nomrbe de prothèses chez les hommes est 6 fois plus élevé que celle chez les femmes. 
+
+- L'augmentation du nomrbe de prothèses chez les individus qui ont entre 50-54 est 5 fois plus élevé que chez les moins de 18 ans...etc
+
+
+11- Calculez les IC des coefficients. 
+```{r}
+exp(cbind(coef(mquasi), confint(mquasi))) 
+```
+_N.B_ Pour une influence singificative, l'intervalle de confiance des variables ne doit pas n'inclure 1 (car exp(0)=1 !).
+
+
+12- Réalisez une prédiction sur les 30 prochaines années.
+```{r}
+#Création d'une nouvelle base de données 
+t <- 1:50
+knee$sexe
+new.sexe <- rep(c("homme","femme"), length = 50)
+new.age <- rep(c("-45", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "+75"), length = 50)
+  
+
+predict.quasi <- predict(mquasi_0, data.frame(year = t+2018, age = new.age, sexe = new.sexe), se.fit = TRUE)
+``` 
+
+13- Présentez graphiquement les valeurs prédites.
+```{r}
+fit <- predict.quasi$fit
+fit
+se.fit <- predict.quasi$se.fit
+
+cbind(exp(fit), exp(se.fit))
+
+
+plot(t+2018, exp(fit), xlab = "Years", ylab = "New cases")
+lines(t+2018, exp(fit+2*se.fit), lty = 2)
+lines(t+2018, exp(fit-2*se.fit), lty = 2)
+```
+
+14- Affichez le tableau des valeurs prédites. 
+```{r}
+table_predict <- round(cbind(Pred_values = exp(fit), LL = exp(fit+2*se.fit), UL = exp(fit-2*se.fit)), digits = 0)
+
+row.names(table_predict) <- 2019:2068 # t + 2018
+
+table_predict
+```
+
+15- Donnez 1 raison expliquant l'intérêt pratique d'une telle approche de modélisation dans la vie réelle et 1 inconvénient d'une telle appproche de prédiction.
