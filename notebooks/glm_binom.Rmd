@@ -1,31 +1,15 @@
 ---
-title: "glm_binom"
+title: "GLM binomial"
 author: "EL BADISY Imad"
 date: "`r Sys.Date()`"
 output:
-  pdf_document:
-    fig_caption: no 
-    number_sections: yes
-    toc: yes
-    toc_depth: 3
-    highlight: tango
-header-includes:
-  - \usepackage{titling}
-  - \pretitle{\begin{flushleft}\huge\bfseries}
-  - \posttitle{\end{flushleft}}  
-  - \preauthor{\begin{flushleft}\Large}
-  - \postauthor{\end{flushleft}}  
-  - \predate{\begin{flushleft}\large}
-  - \postdate{\end{flushleft}}
-  - \hypersetup{colorlinks=true, urlcolor = {blue}, linkcolor = {red}}
-  - \renewcommand{\linethickness}{0.05em}
-editor_options: 
-  chunk_output_type: console
+  pdf_document: default
 ---
 
-## Problématique : Cancer de la prostate 
+# Problématique : Cancer de la prostate 
 
 Le traitement du cancer de la prostate varie en fonction de l'état des nœuds lymphatiques entourant la prostate. Pour éviter une opération chirurgicale lourde qui consiste à l'ouverture de la cavité abdominale, les médecins peuvent faire une évaluation préalable de l'état des nœuds lymphatiques en fonction de certains variables explicatives. Dans cette application nous allons modéliser la variable binaire Y en fonction des variables explicatives suivantes : 
+
 
 `Y`(Y = 0 si le cancer n’a pas atteint le réseau lymphatique ; Y = 1 si le cancer a atteint le réseau lymphatique) 
 
@@ -37,9 +21,10 @@ Le traitement du cancer de la prostate varie en fonction de l'état des nœuds l
 
 `taille` : taille de la tumeur (0=petite, 1=grande) 
 
-`grade` : état pathologique de la tum;eur déterminé par biopsie (0=moyen, 1=grave) 
+`grade` : état pathologique de la tumeur déterminé par biopsie (0=moyen, 1=grave) 
 
 `log.acid` : logarithme népérien du niveau d’acidité.
+
 
 ## Application 
 
@@ -47,8 +32,7 @@ Le traitement du cancer de la prostate varie en fonction de l'état des nœuds l
 
 2- Vérifiez la structure du dataset avec la fonction `str()` et transformez les variables suivantes en format `factor` : `Y`, `rayonx`, `taille` et `grade`.
 ```{r}
-cancerprostate <- read.csv("~/Desktop/STAT2/STAT_Teaching/datasets/cancerprostate.txt", sep=";") # chemin à changer !!!
-
+cancerprostate <- read.csv("~/Desktop/STAT2/STAT_Teaching/stat_epidem_git/datasets/cancerprostate.txt", sep=";")
 View(cancerprostate)
 ```
 
@@ -65,11 +49,17 @@ m1 <- glm(Y~log.acid, data = cancerprostate, family = binomial)
 summary(m1)
 ```
 
+
+$$Y = \beta_0 + \beta_1 X_1 + ...... + \beta_i X_i$$
+
+
 5- Interprétez le coefficient de régression associé à la variable `log.acid`.
 ```{r}
 exp(coef(m1))
 ```
+
 Une augmentation de 1 unité de log.acid se traduira par une multiplication de l'odds-ratio de $p(Y = 1)$ par 9.4 fois (exp(log.acif) = 9.43).
+
 
 6- Représentez graphiquement les valeurs estimées de la $p(log.acid)$.
 ```{r}
@@ -82,7 +72,7 @@ x <- seq(-2, 2, by=0.01) #générer une séquence de valeurs entre -2 et 2 en al
 y <- exp(beta[1] + beta[2]*x  ) / (1 + exp(beta[1] + beta[2]*x)) #voir l'équation du modèle !
 
 
-plot(x, y, type = "l", xlab ="log.acid", ylab ="p(log.acid)")
+plot(x, y, type = "l", xlab ="log.acid", ylab ="p(Y=1)")
 abline(h = 0.5, lty = 2)
 xlim <- -beta[1]/beta[2]
 abline(v = xlim, lty = 2)
@@ -114,6 +104,7 @@ La procédure `backward` : procédure descendante où à chaque étape, on enlè
 
 ```{r}
 select.model <- step(res.complet, direction = "backward")
+select.model
 ```
 
 10- Prédiction des probabilités pour des nouveaux cas.
@@ -127,6 +118,7 @@ Individu 2 : 49, 0.86, 0, 0, 1, -0.15
 Individu 3 : 67, 0.72, 1, 0, 1, -0.33
 
 Individu 4 : 51, 0.95, 1, 1, 1, -0.05
+
 
 A l'aide de la fonction `predict()`, estimez les probabilités pour les nouveaux cas.
 
@@ -146,7 +138,7 @@ On utilisera la fonction `predict()` pour pour estimer les valeurs prédites par
 ```{r}
 new.data <- data.frame(matrix(c(61, 0.6, 1, 0, 1, -0.5, 49, 0.86, 0, 0, 1, -0.15, 67, 0.72, 1, 0, 1, -0.33, 51, 0.95, 1, 1, 1, -0.05), ncol = 6, byrow = T)) #créer une matrice de nouvelles données et convertir son objet en dataframe
 
-names(new.data) <- names(cancerprostate) [-6] #affecter les mêmes noms des variables aux dataframe des nouvelles données
+names(new.data) <- names(cancerprostate)[-6] #affecter les mêmes noms des variables aux dataframe des nouvelles données
 
 for (i in 3:5) new.data [, i] <- factor(new.data[,i])
 ```
@@ -191,6 +183,7 @@ Le taux de mal classé est de 0.208, cela veut dire que la probabilité que notr
 
 On construit une fonction de coût admettant en entrée les valeurs observées et les valeurs prédites de Y
 ```{r}
+install.packages("boot")
 library(boot)
 
 cout <- function (Y_obs, prevision_pr)
@@ -198,3 +191,4 @@ cout <- function (Y_obs, prevision_pr)
 
 cv.glm(cancerprostate, select.model, cout)$delta[1]
 ```
+

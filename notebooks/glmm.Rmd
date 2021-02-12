@@ -1,26 +1,9 @@
 ---
-title: "glmm"
+title: "GLMM"
 author: "EL BADISY Imad"
 date: "`r Sys.Date()`"
 output:
-  pdf_document:
-    fig_caption: no 
-    number_sections: yes
-    toc: yes
-    toc_depth: 3
-    highlight: tango
-header-includes:
-  - \usepackage{titling}
-  - \pretitle{\begin{flushleft}\huge\bfseries}
-  - \posttitle{\end{flushleft}}  
-  - \preauthor{\begin{flushleft}\Large}
-  - \postauthor{\end{flushleft}}  
-  - \predate{\begin{flushleft}\large}
-  - \postdate{\end{flushleft}}
-  - \hypersetup{colorlinks=true, urlcolor = {blue}, linkcolor = {red}}
-  - \renewcommand{\linethickness}{0.05em}
-editor_options: 
-  chunk_output_type: console
+  pdf_document: default
 ---
 
 # Problématique 
@@ -37,7 +20,7 @@ douleur en France.
 
 ```{r}
 #Chargement de la base 
-keta2 <- read.csv("~/Desktop/STAT2/STAT_Teaching/datasets/keta2.csv")
+keta2 <- read.csv("~/Desktop/STAT2/STAT_Teaching/stat_epidem_git/datasets/keta2.csv")
 
 #voir la structre de la base 
 str(keta2)
@@ -229,7 +212,7 @@ abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
 L'hypothèse des observations influantes est confirmée par le plot de la distance de cooks.
 
 
-* A faire pour compléter l'analyse :
+A faire pour compléter l'analyse :
 
 - supprimer les outliers 
 - ré-estimer le modèle 

@@ -1,0 +1,180 @@
+---
+title: "Analysis de données de survie"
+author: "EL BADISY Imad"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+---
+
+
+
+## Application 1 : Estimations des fonctions de survie (gehan dataset)
+
+Il s'git de données d'un essai clinique sur 42 patients. Les sujets sont divisés en 2 groupes : 
+
+* Groupe de contrôle : reçu aucun médicament
+* Groupe de traitement : reçu 6-mercaptopurine (traitement pour la leucémie)
+
+L'essai s'est déroulé avec la technique des paires assorites. Chaque sujet du groupe traitement lui a été affecté un sujet du groupe de contrôle ayant des caractéristiques proches (i.e. âge, sexe,..etc.). L'article d'origine est consultable à partir de ce [lien](https://hwbdocuments.env.nm.gov/Los%20Alamos%20National%20Labs/TA%2011/3503.pdf)
+
+
+1- Installez le package `survival` et chargez le dans votre session. Puis, à partir de votre répetroire de travail, chargez le dataset _gehan_. 
+```{r}
+library(survival) #charger le package 'survival'
+gehan <- read.csv("~/Desktop/STAT2/STAT_Teaching/stat_epidem_git/datasets/gehan.csv")
+View(gehan) #visualiser la base de données 
+```
+
+- 'pair' : label de la paire
+- 'time' : temps de rémission en semaine
+- 'cens' : état à la date de point, 0 = non censuré ; 1 = censuré
+- 'treat' : control = groupe de contrôle ; 6-MP = groupe de traitement 
+
+2- Estimez la courbe de survie globale par la méthode Kaplan-Meier en utilisant la fonction `surfit()`.
+```{r}
+s.gehan <- survfit(Surv(time, cens) ~ 1, data = gehan)
+s.gehan
+```
+42 sujets ont été inclus dans l'essai, dont 30 ont présenté l'événement étudié. La durée de survie médiane est de 12 semaines avec un IC 95% de [8-22].
+
+3- Affichez la table de mortalité/survie à l'aide de la fonction `summary`.
+```{r}
+summary(s.gehan)
+```
+
+'time' : durée d'apparition de l'événement 
+'n.risk' : nombre d'individus à risque 
+'n.event' : nombre d'événement observés
+'survival' : probabilité de survie estimée
+'std.err' : sd de la survie estimée
+
+4- Présentez la courbe de survie globale. 
+```{r}
+plot(s.gehan,
+     mark.time = T,
+     xlab = "Durée de rémission en semaines",
+     ylab = "Probabilité de survie",
+     main = "Courbe de survie globale",
+     col = "red")
+```
+Il s'agit de la courbe survie estimée par la méthode de Kaplan-Meier. On voit les probabilité de survie (y-axis) représentées en fonction du temps (x-axis). Les lignes en pointillés représentent l'IC 95%. Enfin, les traits verticaux indiquent les temps des censures observées.
+
+5- Estimez la survie en fonction du groupe de traitement.
+```{r}
+s.gehan.gr <- survfit(Surv(time, cens) ~ treat, data = gehan)
+s.gehan.gr
+```
+Les groupes de traitement sont parfaitement équilibrés (21 sujets dans chaque groupe). 
+Pour le groupe 6-MP : 9 sujets ont présenté l'événement étudié avec une médiane de survie de 23 (IC 95% $[16, \infty]$).
+Pour le groupe de contrôle (i.e. placebo) : 21 sujet ont présenté l'événement étudié avec une médiane de survie de 8 semaines (IC 95% [4-12]).
+
+6- Affichez les tables de survie de chacun des 2 groupes de traitement. 
+```{r}
+summary(s.gehan.gr)
+```
+
+7- Comparez les courbes de survie estimées des deux groupes par le test du Log-Rank.
+
+Le test du logrank est le test le plus populaire pour comparer 2 ou plusieurs courbes de survie. Il consiste à comparer le nombre d'événements observés au nombre d'événements attendus sous l'hypothèse nulle d'égalité de fonctions de survie des groupes. La statistique de test suit sous cette hypothèse approximativement une distribution du Chi2 à (nombre de groupes de comparaisons – 1) degré(s) de liberté.
+
+H0 : Egalité de fonctions de survie
+H1 : Non égalité de fonctions de survie
+
+```{r}
+survdiff(Surv(time, cens) ~ treat, data = gehan)
+```
+Avec une p-value = 4.17e-05 < 0.05, on peut rejeter H0 et accepter H1 à un risque de 5%. La survie dans le groupe 6MP est statistiquement meilleure que la survie dans le groupe de contrôle. 
+
+8- Présentez graphiquement les courbes de survie des deux groupes.
+```{r}
+plot(s.gehan.gr,
+     xlab = "Durée de rémission en semaines",
+     ylab = "Probabilité de survie",
+     main = "Courbes de survie en fonction des groupes de traitement",
+     lty = c(1,2))
+legend(25, 1, legend = c("6-MP", "Placebo"), lty = c(1,2))
+text(15, 0.5, c("p= 4.17e-05 "))
+```
+
+
+
+### Application 2 : Ajustement du modèle de Cox (lung cancer) 
+ 
+Le dataset `lung` contient des données de survie pour des patients qui ont un cancer de poumon avancé (Voir `help(lung)` pour plus de détails)   
+
+9- Chargez le package(`survival`) et le dataset `lung` inclus dedans. 
+```{r}
+library(survival)
+data(lung)
+head(lung) #afficher les 6 premières lignes 
+str(lung)
+```
+
+10- Recodez la variable `sex` en format *factor* en lui donnant des labels (Male = 1, Female =2)
+```{r}
+lung$sex <- factor(lung$sex, levels = c(1,2), labels = c("Male", "Female"))
+lung$sex
+```
+
+11- Représentez graphiquement la fonction de survie globale et celle pour chaque sexe sous forme d'une courbe de Kaplan-Meier.
+```{r}
+## Estimateur de Kaplan-Meier 
+km.global <- survfit(Surv(time, status) ~ 1, data = lung, conf.type = "log-log") # global
+km.sex <- survfit(Surv(time, status) ~ sex, data = lung, conf.type = "log-log") # par sex
+## courbes de KM
+plot(km.global, conf.int = TRUE, main = "Courbe de survie globale") #courbe de s
+plot(km.sex, conf.int = F, main = "Courbe de survie en fonction du sexe", col = c("blue", "red"))
+legend(800, 1, c("Male", "Female"), lty = 1, col = c("blue", "red"))
+```
+12- Estimez un modèle de Cox à l'aide de la fonction `coxph()`, en ajustant l'objet de survie (i.e. taux relatif de survie) en fonction de `age`et `sex`. A noter que l'instruction `strata()` permet de stratifier le taux de risque en fonction d'une covariable. Ici nous estimons un modèle stratifié sur le sexe et considérons `age` comme principale variable explicative. 
+```{r}
+m1 <- coxph(Surv(time, status) ~ age + strata(sex), data = lung)
+summary(m1)
+```
+Le risque relatif de décès (i.e. hazards ratio) est multiplié par 1.016 à chaque année supplémentaire des sujets. Il est clair que l'âge n'a pas un effet statistiquement significatif sur le risque relatif de décés (p = 0.0776)
+
+13- Réestimez le modèle en rajoutant `ph.karno` et `wt.loss` et en stratifiant sur `sex`
+```{r}
+m2 <- m1 <- coxph(Surv(time, status) ~ age + sex + pat.karno + wt.loss, data = lung)
+summary(m2)
+
+```
+Seules `sex` et `pat.karno` ont un effet statistiquement significatif. Le risque relatif est 40%  moins elévé chez les femmes par rapport aux hommes (i.e. RR multiplié par 0.58 ). Une augmentation de 1 unité dans le score de Karnofsky fait baisser le RR de 0.02 chez les patients. 
+
+
+
+**Hypothèse des hasards proportionnels**
+
+Le rapport du risque relatif pour le sujet $i$ et $j$ ne doit pas dépendre du temps : $RR(t) = e^\beta$. Il s'agit de l'hyptohèse principale du modèle de Cox que l'on désigne sous le nom de d'hypothèse des risques proportionnels, car elle indique que les risques instantanés de la maladie restent proportionnels au cours du temps. 
+
+
+14- Effectuez un test de l'hypothèse de proportionnalité à l'aide de la fonction `cox.zph()`
+```{r}
+m1.zph <- cox.zph(m1)
+m1.zph
+```
+La sortie indique les résidus standarisés pour chacune des variables avec degré de significativité globale. 
+
+H0 : proportionnalité des taux des décès
+H1 : non proportionnalité des taux ds décès
+
+Ici nous acceptions H0 (i.e. l'hyptohèse de proportionnalité est bien vérifiée !)
+
+
+Dans le modèle de Cox, le risque relatif est lié aux covariables par une fonction de lien 'log-linéaire` :
+
+$$log(h(t | X)) = log(exp (X\beta) ~ h_0(t)) = log (h_0(t) + X_1\beta_1 + ...+ X_p\beta_p)$$
+
+Le tracé des résidus `martingale` en fonction de covariables permet d'illuster si certains covariables ont besoin de tranformation avant leur inclusion dans le modèle. Par exemple :
+
+Une croissance rapide de la courbe -> transformation en puissance 
+Une croissance lente de la courbe -> transformation logarithmique ou racine
+
+
+- Vérifiez graphiquement cette hypothèse de proportionnalité 
+```{r}
+
+plot(m1.zph,  col = c("red", "blue"))
+```
+Par exemple, pour le premier plot, la courbe rouge en trait continue correspond à l'évolution du coefficient $\beta_{age}$ et les courbes bleu en pointillés correspondent à son l'IC à 95%. 
+

@@ -1,0 +1,197 @@
+---
+title: "Introduction au modèle SIR"
+author: "EL BADISY Imad"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+---
+
+
+# Généralités 
+
+L'utilisation de modèles mathématiques pour comprendre la dynamique des maladies infectieuses a une histoire très riche en épidémiologie. Dans l'article fondateur de Kermack et McKendrick, ces derniers ont publié un ensemble d'équations générales (Breda et al. 2012) pour mieux comprendre la dynamique de la propagation d'une maladie infectieuse à travers une population sensible. Le modèle le plus simple est le modèle SIR (Susceptible-Infectous-Reconvered) qui peut être exposé en un ensemble de 3 d'équations différentielles : 
+
+$$\frac{dS}{dt} = \mu (N - S) - \beta I \frac{S}{N}~(1)$$
+$$\frac{dI}{dt} = \beta I \frac{S}{N} - (\mu + \gamma)I~(2)$$
+
+$$\frac{dR}{dt} = \gamma I - \mu R~(3)$$
+Le modèle SIR fait partie des modèles épidémiologiques compartimentaux car il est composé de trois compartiments. Les hypothèses des équations (2) et (3) sont les suivantes : 
+
+- L'infection circule dans une population de taille $N$ avec un taux de mortalité, $\mu$ , qui est équilibré par un taux de natalité $\mu$. De la somme des équations (2) et (3), $dN/dt = 0$ et $N = S + I + R$ est donc constant.
+
+- L'infection provoque une morbidité aiguë (et non une mortalité). c'est-à-dire que dans cette version du modèle SIR, nous supposons que nous pouvons ignorer la mortalité due à la maladie. Il s'agit d'une hypthèse valable pour certaines infections comme la varicelle, mais certainement pas pour d'autres comme la rage ou l'ebola.
+
+- Les individus sont recrutés directement dans la classe sensible à la naissance (nous ignorons donc l'immunité maternelle périnatale).
+
+- La transmission de l'infection des personnes infectieuses aux personnes sensibles est contrôlée par un terme de contact bilinéaire $\beta I \frac{N}{S}$ . Cela découle de l'hypothèse selon laquelle $I$ les individus infectés se mélangent indépendamment et au hasard avec tous les autres individus. Donc la fraction $S/N$ des rencontres se fait avec des individus susceptibles ; $\beta$ est le taux de contact multiplié par la probabilité de transmission en cas de contact entre un sensible et un individu infectieux.
+
+- On suppose que les chances de guérison ou de décès ne changent pas au cours de l'infection.
+
+- Les personnes infectées passent directement dans la classe infectieuse et y reste pendant une période infectieuse moyenne de $1/\gamma$. 
+
+- Le modèle suppose que les personnes récupérées sont immunisées pour la vie contre la réinfection .
+
+Le taux de reproduction de base ($R0$), est défini comme le nombre prévu de reproduction de l'infection à partir d'un seul cas. C'est une quantité importante en épidémiologie. Pour ce simple modèle SIR : 
+
+$$R0 = \frac{\beta}{\gamma + \mu}$$
+
+Si on fait l'hypothèse que durant une certaine épidémie le taux de naissance et de décès sont compensables (i.e. $\mu = 0$) on parle d'une épidémie fermée. Dans cette application, et pour des raisons de simplifications, nous considérant que l'épidémie du CoronaVirus est fermée. 
+
+## Exemple 1 : Corona dataset
+
+1- Chargez le dataset `corona` à partir de votre répertoire de travail.
+```{r}
+corona <- read.csv("~/Desktop/STAT2/STAT_Teaching/stat_epidem_git/datasets/corona.csv")
+corona
+```
+
+# Application 1 : Estimation du modèle SIR 
+
+2- Préparation du dataset 
+```{r}
+head(corona)
+str(corona)
+
+# convertir date en format 'Date'
+#From the lubridate package: Use mdy_hms() to read in the characters as Month, Day, Year and Hours, Minutes, Seconds, then wrap with as.Date() to strip the time.
+library(lubridate)
+corona$Date <- as.Date(mdy_hms(corona$Date))
+corona$Confirmed <- as.integer(corona$Confirmed)
+
+# On remplace "Mainland China" par "China"
+
+corona$Country[corona$Country == "Mainland China"] <- "China" 
+
+
+# sélectionner que les observations relatives à la chine  
+corona_china <- corona[corona$Country == "China",]
+
+# construire un data frame d'incidence pour la chine : date + cases
+incidence_china <- data.frame(date = corona_china$Date, cases = corona_china$Confirmed) 
+
+
+str(incidence_china)
+
+incidence_china <- dplyr::arrange(incidence_china, date)
+
+incidence_china <- aggregate(incidence_china["cases"], by=incidence_china["date"], sum)
+
+```
+3- Exploration graphique de l'incidence 
+```{r}
+par(mar = c(5,5,2,5))
+plot(incidence_china$date, incidence_china$cases, type="b",
+xlab="Week", ylab="Incidence")
+par(new=T)
+plot(incidence_china$date, incidence_china$cases, type="l", col="red", axes=FALSE, xlab=NA, ylab=NA, log="y")
+axis(side = 4)
+mtext(side = 4, line = 4, "Cumulative incidence")
+legend("topleft", legend=c("Cases", "Cumulative"),
+lty=c(1,1), pch=c(1,NA), col=c("black", "red"))
+```
+
+4- A partir du dataset `incidence_china` nous allons stocker dans trois vecteurs diffrents : les cas infectés, les jours et le nombre total de la population.  
+```{r}
+Infected <- incidence_china$cases
+
+Day <- 1:(length(Infected))
+
+N <- 1400000000 # taille de la population : https://www.worldometers.info/world-population/china-population/
+```
+
+Afin de résoudre le système ED du modèle nous utiliserons le package `deSolve`. Pour cela, nous allons suivre les étapes suivantes : 
+
+* Etape 1 : On définie une fonction générale du système d'équations (i.e. du modèle)
+
+```{r}
+sirmod <- function(t, y, parms) {
+# définir les variable d'état dans un vecteur y
+S = y[1]
+I = y[2]
+R = y[3]
+# définir les paramètres du modèle dans le vecteur parms
+beta = parms["beta"]
+mu = parms["mu"]
+gamma = parms["gamma"]
+N = parms["N"]
+# définir l'ensemble des équations 
+dS = mu * (N - S) - beta * S * I/N
+dI = beta * S * I/N - (mu + gamma) * I
+dR = gamma * I - mu * R
+res = c(dS, dI, dR)
+# retrouner les gradients en list 
+list(res)
+}
+```
+
+* Etape 2 : On définie les paramètres du modèle 
+
+On précise les moments où nous voulons que la fonction `ode()` enregistre les états du système (ici, nous utilisons 25 jours avec 1 incrément de temps par jour comme spécifié dans le vecteur `times`). Les valeurs des paramètres (comme spécifié dans le vecteur `parms`), et les conditions de départ (spécifiées dans `start`). 
+
+Dans ce cas, nous modélisons la fraction d'individus dans chaque classe, nous fixons donc $N = 1$, et considérons une maladie avec une période infectieuse de 2 semaines $\gamma = 1/2$, pas de naissances ni de décès $\mu = 0$ (i.e. stabilité démographique) et un taux de transmission de 2 $\beta = 2$. Pour nos conditions de départ, nous supposons que 0,1 % du taux initial est infectée et la fraction restante est susceptible. 
+
+```{r}
+times <- seq(0, 25, by = 1) 
+parms <- c(mu = 0, N = 1, beta = 2, gamma = 1/2)
+start <- c(S = 0.99999, I = 0.00001, R = 0)
+```
+
+* Etape 3: On précise les valeurs de départ, les temps, la fonction de gradient et le vecteur de paramètres à la fonction `ode()` comme suggéré par `args(ode)` (voir ? `ode()`).  Ainsi, pour plus de commodité, nous convertissons la sortie en data.frame (car `ode()` renvoie une liste). Avec `head()` on peut voir les 5 premières lignes de sortie, en ajoutant en interne `round()` pour arrondir le nombre à trois décimales.
+```{r}
+library(deSolve)
+out <- ode(y=start, times=times, func=sirmod, parms=parms)
+out <- as.data.frame(out)
+head(round(out, 3))
+```
+
+
+* Etape 4 : Représentation graphique du modèle estimé
+
+- Première répsentation simple 
+```{r}
+plot(x=out$time, y=out$S, ylab="Fraction", xlab=
+"Time", type="l")
+lines(x=out$time, y=out$I, col="red")
+lines(x=out$time, y=out$R, col="green")
+```
+Pour avoir un graphique plus informatif, nous voulons présenter quelques caractéristiques supplémentaires telles que le _taux de reproduction effectif ($R_E$)_. Il s'agit du nombre prévu de nouveaux cas dans une population qui n'est pas complètement susceptible.
+
+Ainsi qu'une une légende du graphique par laquelle nous pouvons confirmer que le renouvellement de l'épidémie se produit exactement lorsque $R_E = R0.S=1$, où $S$s est la fraction des susceptibes restants. 
+
+Le seuil $R0.S = 1 ⇒ s∗ = 1/R0$ se traduit par la puissante règle empirique de l'éradication induite par un vaccin et le développement de l'immunité collective. 
+
+```{r}
+#On calcule  R0
+R0 <- parms["beta"]/(parms["gamma"]+parms["mu"])
+
+#On ajuste les marges pour accommoder le deuxième axe droit
+par(mar = c(5,5,2,5))
+#On plote les variables d'état
+plot(x=out$time, y=out$S, ylab="Fraction", xlab="Time",
+type="l")
+lines(x=out$time, y=out$I, col="red")
+lines(x=out$time, y=out$R, col="green")
+#On ajoute un poin vertical au point de renouvellement 
+xx <- out$time[which.max(out$I)]
+lines(c(xx,xx), c(1/R0,max(out$I)), lty=3)
+#On paramètre pour préparer la superposition du deuxième graphique
+par(new=TRUE)
+#On plote le taux effectif de reproduction (R0.s)
+plot(x=out$time, y=R0*out$S, type="l", lty=2, lwd=2,
+col="black", axes=FALSE, xlab=NA, ylab=NA,
+ylim=c(-.5, 4.5))
+lines(c(xx, 26), c(1,1), lty=3)
+#On ajoute manuellement un texte pour y-axe droit
+axis(side = 4)
+mtext(side = 4, line = 4, expression(R[E]))
+#On ajoute une légende à droite 
+legend(20, 4, legend=c("S", "I", "R",
+expression(R[E])), lty=c(1,1,1, 2),
+col=c("black", "red", "green", "black"))
+```
+L'épidémie fermée du modèle SIR avec l'axe gauche les fraction de $N$ et l'axe droit et taux de reproduction effectif $R_E$. L'épidémie change de direction à $R_E = 1$. 
+
+On peut maintenant extraire quelques statistiques intéressantes. Afin de connaitre l'apogée de la pandémie, il suffit de voir le $max(I)$ dans le data.frame `out` (résultats du modèle). Ensuite nous pouvons multiplier cette fraction par $N$ pour obtenir une prédiction sur le nombre max des cas détectés.
+```{r}
+out[out$I == max(out$I), "I", drop = FALSE] # apogée de la pandémie
+```
