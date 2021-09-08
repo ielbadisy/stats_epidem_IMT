@@ -5,7 +5,7 @@ Ces notes couvrent principalement les notions suivantes :
 
 05/02/2021
 - Introduction à l'épidémiologie quantitative : concepts clés.
-- Principaux modèles multivariés : modèle de logisitique - modèle de poisson - modèles mixtes
+- Principaux modèles multivariés : modèle de régression logisitique - modèle de régression poisson - modèles mixtes
 
 12/02/2021
 - Analyse de données de survie
